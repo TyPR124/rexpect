@@ -92,17 +92,19 @@ pub use session::{spawn, spawn_bash, spawn_python};
 #[cfg(unix)]
 pub use reader::ReadUntil;
 
+#[cfg(windows)]
+mod windows;
+
 #[macro_use]
 extern crate error_chain;
 
-#[cfg(unix)]
 pub mod errors {
     use std::time;
-    use process::wait;
+    use std::process::ExitStatus;
     // Create the Error, ErrorKind, ResultExt, and Result types
     error_chain!{
         errors {
-            EOF(expected:String, got:String, exit_code:Option<wait::WaitStatus>) {
+            EOF(expected:String, got:String, exit_code:Option<ExitStatus>) {
                 description("End of filestream (usually stdout) occurred, most probably\
                              because the process terminated")
                 display("EOF (End of File): Expected {} but got EOF after reading \"{}\", \
