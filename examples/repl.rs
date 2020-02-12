@@ -1,9 +1,8 @@
 //! An example how you would test your own repl
 
+extern crate rexpect;
 #[cfg(unix)]
 mod unix {
-    extern crate rexpect;
-
     use rexpect::spawn;
     use rexpect::session::PtyReplSession;
     use rexpect::errors::*;
@@ -40,7 +39,7 @@ mod unix {
         Ok(())
     }
 
-    fn main() {
+    pub fn main() {
         do_ed_repl().unwrap_or_else(|e| panic!("ed session failed with {}", e));
     }
 }

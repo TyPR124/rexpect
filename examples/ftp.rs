@@ -1,7 +1,7 @@
+extern crate rexpect;
+
 #[cfg(unix)]
 mod unix {
-    extern crate rexpect;
-
     use rexpect::spawn;
     use rexpect::errors::*;
 
@@ -22,7 +22,7 @@ mod unix {
     }
 
 
-    fn main() {
+    pub fn main() {
         do_ftp().unwrap_or_else(|e| panic!("ftp job failed with {}", e));
     }
 }

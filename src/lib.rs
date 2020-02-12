@@ -92,6 +92,9 @@ pub use session::{spawn, spawn_bash, spawn_python};
 #[cfg(unix)]
 pub use reader::ReadUntil;
 
+#[cfg(unix)]
+mod unix;
+
 #[cfg(windows)]
 mod windows;
 

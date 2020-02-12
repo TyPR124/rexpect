@@ -1,7 +1,7 @@
+extern crate rexpect;
+
 #[cfg(unix)]
 mod unix {
-    extern crate rexpect;
-
     use rexpect::spawn;
     use rexpect::errors::*;
     use rexpect::process::wait;
@@ -35,7 +35,7 @@ mod unix {
     }
 
 
-    fn main() {
+    pub fn main() {
         exit_code_fun().unwrap_or_else(|e| panic!("cat function failed with {}", e));
     }
 }

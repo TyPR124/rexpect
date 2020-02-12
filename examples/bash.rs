@@ -1,6 +1,8 @@
+extern crate rexpect;
+
 #[cfg(unix)]
 mod unix {
-    extern crate rexpect;
+    
     use rexpect::spawn_bash;
     use rexpect::errors::*;
 
@@ -22,7 +24,7 @@ mod unix {
         Ok(())
     }
 
-    fn main() {
+    pub fn main() {
         run().unwrap_or_else(|e| panic!("bash process failed with {}", e));
     }
 }
