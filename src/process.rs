@@ -12,12 +12,16 @@ use std::process::{Command, ExitStatus};
 // use nix::sys::{stat, termios};
 // use nix::unistd::{fork, ForkResult, setsid, dup, dup2, Pid};
 // use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
+
+#[cfg(unix)] // TODO: Move this somewhere else
 pub use nix::sys::{wait, signal};
+
 use errors::*; // load error-chain
 
 #[cfg(unix)]
 use crate::unix as raw;
-
+#[cfg(windows)]
+use crate::windows as raw;
 
 /// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
@@ -174,7 +178,7 @@ impl PtyProcess {
     // }
 }
 
-#[cfg(test)]
+#[cfg(all(unix, test))]
 mod tests {
     use super::*;
     use std::io::{BufReader, LineWriter};

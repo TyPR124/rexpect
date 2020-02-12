@@ -83,7 +83,7 @@ extern crate nix;
 
 extern crate regex;
 extern crate tempfile;
-#[cfg(unix)]
+// #[cfg(unix)]
 pub mod process;
 #[cfg(unix)]
 pub mod session;
