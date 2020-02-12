@@ -15,9 +15,6 @@ use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 pub use nix::sys::{wait, signal};
 use errors::*; // load error-chain
 
-#[cfg(unix)]
-use crate::unix as raw;
-
 
 /// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
@@ -59,56 +56,96 @@ use crate::unix as raw;
 /// # }
 /// ```
 pub struct PtyProcess {
-    // pub pty: PtyMaster,
-    // pub child_pid: Pid,
-    // kill_timeout: Option<time::Duration>,
-    inner: raw::process::PtyProcess
+    pub pty: PtyMaster,
+    pub child_pid: Pid,
+    kill_timeout: Option<time::Duration>,
 }
 
 
-// #[cfg(target_os = "linux")]
-// use nix::pty::ptsname_r;
+#[cfg(target_os = "linux")]
+use nix::pty::ptsname_r;
 
-// #[cfg(target_os = "macos")]
-// /// ptsname_r is a linux extension but ptsname isn't thread-safe
-// /// instead of using a static mutex this calls ioctl with TIOCPTYGNAME directly
-// /// based on https://blog.tarq.io/ptsname-on-osx-with-rust/
-// fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
-//     use std::ffi::CStr;
-//     use std::os::unix::io::AsRawFd;
-//     use nix::libc::{ioctl, TIOCPTYGNAME};
+#[cfg(target_os = "macos")]
+/// ptsname_r is a linux extension but ptsname isn't thread-safe
+/// instead of using a static mutex this calls ioctl with TIOCPTYGNAME directly
+/// based on https://blog.tarq.io/ptsname-on-osx-with-rust/
+fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
+    use std::ffi::CStr;
+    use std::os::unix::io::AsRawFd;
+    use nix::libc::{ioctl, TIOCPTYGNAME};
 
-//     /// the buffer size on OSX is 128, defined by sys/ttycom.h
-//     let buf: [i8; 128] = [0; 128];
+    /// the buffer size on OSX is 128, defined by sys/ttycom.h
+    let buf: [i8; 128] = [0; 128];
 
-//     unsafe {
-//         match ioctl(fd.as_raw_fd(), TIOCPTYGNAME as u64, &buf) {
-//             0 => {
-//                 let res = CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned();
-//                 Ok(res)
-//             }
-//             _ => Err(nix::Error::last()),
-//         }
-//     }
-// }
+    unsafe {
+        match ioctl(fd.as_raw_fd(), TIOCPTYGNAME as u64, &buf) {
+            0 => {
+                let res = CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned();
+                Ok(res)
+            }
+            _ => Err(nix::Error::last()),
+        }
+    }
+}
 
 impl PtyProcess {
     /// Start a process in a forked pty
     pub fn new(mut command: Command) -> Result<Self> {
-        let inner = raw::process::PtyProcess::new(command)?;
-        Ok(Self { inner })
+        || -> nix::Result<Self> {
+            // Open a new PTY master
+            let master_fd = posix_openpt(OFlag::O_RDWR)?;
+
+            // Allow a slave to be generated for it
+            grantpt(&master_fd)?;
+            unlockpt(&master_fd)?;
+
+            // on Linux this is the libc function, on OSX this is our implementation of ptsname_r
+            let slave_name = ptsname_r(&master_fd)?;
+
+            match fork()? {
+                ForkResult::Child => {
+                    setsid()?; // create new session with child as session leader
+                    let slave_fd = open(std::path::Path::new(&slave_name),
+                                        OFlag::O_RDWR,
+                                        stat::Mode::empty())?;
+
+                    // assign stdin, stdout, stderr to the tty, just like a terminal does
+                    dup2(slave_fd, STDIN_FILENO)?;
+                    dup2(slave_fd, STDOUT_FILENO)?;
+                    dup2(slave_fd, STDERR_FILENO)?;
+
+                    // set echo off
+                    let mut flags = termios::tcgetattr(STDIN_FILENO)?;
+                    flags.local_flags &= !termios::LocalFlags::ECHO;
+                    termios::tcsetattr(STDIN_FILENO, termios::SetArg::TCSANOW, &flags)?;
+
+                    command.exec();
+                    Err(nix::Error::last())
+                }
+                ForkResult::Parent { child: child_pid } => {
+                    Ok(PtyProcess {
+                           pty: master_fd,
+                           child_pid: child_pid,
+                           kill_timeout: None,
+                       })
+                }
+            }
+        }()
+                .chain_err(|| format!("could not execute {:?}", command))
     }
 
     /// Get handle to pty fork for reading/writing
     pub fn get_file_handle(&self) -> File {
-        self.inner.get_file_handle()
+        // needed because otherwise fd is closed both by dropping process and reader/writer
+        let fd = dup(self.pty.as_raw_fd()).unwrap();
+        unsafe { File::from_raw_fd(fd) }
     }
 
     /// At the drop of PtyProcess the running process is killed. This is blocking forever if
     /// the process does not react to a normal kill. If kill_timeout is set the process is
     /// `kill -9`ed after duration
     pub fn set_kill_timeout(&mut self, timeout_ms: Option<u64>) {
-        self.inner.set_kill_timeout(timeout_ms)
+        self.kill_timeout = timeout_ms.and_then(|millis| Some(time::Duration::from_millis(millis)));
     }
 
     /// Get status of child process, nonblocking.
@@ -134,27 +171,36 @@ impl PtyProcess {
     /// ```
     ///
     pub fn status(&self) -> Option<(wait::WaitStatus)> {
-        self.inner.status()
+        if let Ok(status) = wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)) {
+            Some(status)
+        } else {
+            None
+        }
     }
-
-    pub fn exit_status(&self) -> Option<std::process::ExitStatus> {
-        self.inner.exit_status()
+    // TODO: doc
+    pub fn exit_status(&self) -> Option<ExitStatus> {
+        match wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)) {
+            Ok(wait::WaitStatus::Exited(_, code)) => Some(ExitStatus::from_raw(code)),
+            _ => None
+        }
     }
 
     /// Wait until process has exited. This is a blocking call.
     /// If the process doesn't terminate this will block forever.
     pub fn wait(&self) -> Result<(wait::WaitStatus)> {
-        self.inner.wait()
+        wait::waitpid(self.child_pid, None).chain_err(|| "wait: cannot read status")
     }
 
     /// Regularly exit the process, this method is blocking until the process is dead
     pub fn exit(&mut self) -> Result<wait::WaitStatus> {
-        self.inner.exit()
+        self.kill(signal::SIGTERM)
     }
 
     /// Nonblocking variant of `kill()` (doesn't wait for process to be killed)
     pub fn signal(&mut self, sig: signal::Signal) -> Result<()> {
-        self.inner.signal(sig)
+        signal::kill(self.child_pid, sig)
+            .chain_err(|| "failed to send signal to process")?;
+        Ok(())
     }
 
     /// Kill the process with a specific signal. This method blocks, until the process is dead
@@ -166,7 +212,40 @@ impl PtyProcess {
     /// if `kill_timeout` is set and a repeated sending of signal does not result in the process
     /// being killed, then `kill -9` is sent after the `kill_timeout` duration has elapsed.
     pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
-        self.inner.kill(sig)
+        let start = time::Instant::now();
+        loop {
+            match signal::kill(self.child_pid, sig) {
+                Ok(_) => {}
+                // process was already killed before -> ignore
+                Err(nix::Error::Sys(nix::errno::Errno::ESRCH)) => {
+                    return Ok(wait::WaitStatus::Exited(Pid::from_raw(0), 0))
+                }
+                Err(e) => return Err(format!("kill resulted in error: {:?}", e).into()),
+            }
+
+
+            match self.status() {
+                Some(status) if status != wait::WaitStatus::StillAlive => return Ok(status),
+                Some(_) | None => thread::sleep(time::Duration::from_millis(100)),
+            }
+            // kill -9 if timout is reached
+            if let Some(timeout) = self.kill_timeout {
+                if start.elapsed() > timeout {
+                    signal::kill(self.child_pid, signal::Signal::SIGKILL).chain_err(|| "")?
+                }
+            }
+        }
+    }
+}
+
+impl Drop for PtyProcess {
+    fn drop(&mut self) {
+        match self.status() {
+            Some(wait::WaitStatus::StillAlive) => {
+                self.exit().expect("cannot exit");
+            }
+            _ => {}
+        }
     }
 }
 
