@@ -414,7 +414,7 @@ pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession> {
     })
 }
 
-#[cfg(test)]
+#[cfg(all(unix, test))]
 mod tests {
     use super::*;
     use crate::os::unix::ProcessExt;
