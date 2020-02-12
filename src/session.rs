@@ -93,7 +93,7 @@ impl PtySession {
         match self.reader.read_until(needle) {
             Ok(s) => Ok(s),
             Err(Error(ErrorKind::EOF(expected, got, _), _)) => {
-                Err(ErrorKind::EOF(expected, got, self.process.status()).into())
+                Err(ErrorKind::EOF(expected, got, self.process.exit_status()).into())
             }
             Err(e) => Err(e),
         }

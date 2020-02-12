@@ -2,8 +2,8 @@
 
 use std;
 use std::fs::File;
-use std::process::Command;
-use std::os::unix::process::CommandExt;
+use std::process::{Command, ExitStatus};
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::{thread, time};
 use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
@@ -175,6 +175,13 @@ impl PtyProcess {
             Some(status)
         } else {
             None
+        }
+    }
+
+    pub fn exit_status(&self) -> Option<std::process::ExitStatus> {
+        match wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)) {
+            Ok(wait::WaitStatus::Exited(_, code)) => Some(ExitStatus::from_raw(code)),
+            _ => None
         }
     }
 
