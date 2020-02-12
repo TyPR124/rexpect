@@ -1,17 +1,17 @@
 //! Start a process via pty
 
-use std;
+// use std;
 use std::fs::File;
 use std::process::{Command, ExitStatus};
-use std::os::unix::process::{CommandExt, ExitStatusExt};
-use std::os::unix::io::{FromRawFd, AsRawFd};
-use std::{thread, time};
-use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
-use nix::fcntl::{OFlag, open};
-use nix;
-use nix::sys::{stat, termios};
-use nix::unistd::{fork, ForkResult, setsid, dup, dup2, Pid};
-use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
+// use std::os::unix::process::ExitStatusExt;
+// use std::os::unix::io::{FromRawFd, AsRawFd};
+
+// use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
+// use nix::fcntl::{OFlag, open};
+// use nix;
+// use nix::sys::{stat, termios};
+// use nix::unistd::{fork, ForkResult, setsid, dup, dup2, Pid};
+// use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 pub use nix::sys::{wait, signal};
 use errors::*; // load error-chain
 
@@ -93,7 +93,7 @@ pub struct PtyProcess {
 
 impl PtyProcess {
     /// Start a process in a forked pty
-    pub fn new(mut command: Command) -> Result<Self> {
+    pub fn new(command: Command) -> Result<Self> {
         let inner = raw::process::PtyProcess::new(command)?;
         Ok(Self { inner })
     }
@@ -132,17 +132,17 @@ impl PtyProcess {
     /// # }
     /// ```
     ///
-    pub fn status(&self) -> Option<(wait::WaitStatus)> {
+    pub fn status(&self) -> Option<wait::WaitStatus> {
         self.inner.status()
     }
 
-    pub fn exit_status(&self) -> Option<std::process::ExitStatus> {
+    pub fn exit_status(&self) -> Option<ExitStatus> {
         self.inner.exit_status()
     }
 
     /// Wait until process has exited. This is a blocking call.
     /// If the process doesn't terminate this will block forever.
-    pub fn wait(&self) -> Result<(wait::WaitStatus)> {
+    pub fn wait(&self) -> Result<wait::WaitStatus> {
         self.inner.wait()
     }
 
@@ -175,6 +175,7 @@ mod tests {
     use std::io::{BufReader, LineWriter};
     use nix::sys::{wait, signal};
     use std::io::prelude::*;
+    use std::{thread, time};
 
     #[test]
     /// Open cat, write string, read back string twice, send Ctrl^C and check that cat exited
