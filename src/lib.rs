@@ -81,17 +81,21 @@
 extern crate nix;
 extern crate regex;
 extern crate tempfile;
-
+#[cfg(unix)]
 pub mod process;
+#[cfg(unix)]
 pub mod session;
+#[cfg(unix)]
 pub mod reader;
-
+#[cfg(unix)]
 pub use session::{spawn, spawn_bash, spawn_python};
+#[cfg(unix)]
 pub use reader::ReadUntil;
 
 #[macro_use]
 extern crate error_chain;
 
+#[cfg(unix)]
 pub mod errors {
     use std::time;
     use process::wait;
