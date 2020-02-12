@@ -46,8 +46,9 @@ use crate::unix as raw;
 /// # fn main() {
 ///
 /// let mut process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-/// let fd = dup(process.pty.as_raw_fd()).unwrap();
-/// let f = unsafe { File::from_raw_fd(fd) };
+/// //let fd = dup(process.inner.pty.as_raw_fd()).unwrap();
+/// //let f = unsafe { File::from_raw_fd(fd) };
+/// let f = process.get_file_handle();
 /// let mut writer = LineWriter::new(&f);
 /// let mut reader = BufReader::new(&f);
 /// process.exit().expect("could not terminate process");
@@ -59,10 +60,8 @@ use crate::unix as raw;
 /// # }
 /// ```
 pub struct PtyProcess {
-    // pub pty: PtyMaster,
-    // pub child_pid: Pid,
-    // kill_timeout: Option<time::Duration>,
-    inner: raw::process::PtyProcess
+    // pub(crate) is for testing
+    pub(crate) inner: raw::process::PtyProcess
 }
 
 
@@ -197,8 +196,8 @@ mod tests {
             writer.write_all(&[3])?; // send ^C
             writer.flush()?;
             let should =
-                wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
-            assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
+                wait::WaitStatus::Signaled(process.inner.child_pid, signal::Signal::SIGINT, false);
+            assert_eq!(should, wait::waitpid(process.inner.child_pid, None).unwrap());
             Ok(())
         }()
                 .unwrap_or_else(|e| panic!("test_cat failed: {}", e));

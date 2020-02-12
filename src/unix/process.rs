@@ -43,8 +43,9 @@ use errors::*; // load error-chain
 /// # fn main() {
 ///
 /// let mut process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-/// let fd = dup(process.pty.as_raw_fd()).unwrap();
-/// let f = unsafe { File::from_raw_fd(fd) };
+/// //let fd = dup(process.inner.pty.as_raw_fd()).unwrap();
+/// //let f = unsafe { File::from_raw_fd(fd) };
+/// let f = process.get_file_handle();
 /// let mut writer = LineWriter::new(&f);
 /// let mut reader = BufReader::new(&f);
 /// process.exit().expect("could not terminate process");

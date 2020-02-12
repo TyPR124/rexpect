@@ -424,7 +424,7 @@ mod tests {
             let mut s = spawn("cat", Some(1000))?;
             s.send_line("hans")?;
             assert_eq!("hans", s.read_line()?);
-            let should = ::process::wait::WaitStatus::Signaled(s.process.child_pid,
+            let should = ::process::wait::WaitStatus::Signaled(s.process.inner.child_pid,
                                                                ::process::signal::Signal::SIGTERM,
                                                                false);
             assert_eq!(should, s.process.exit()?);
