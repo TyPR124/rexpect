@@ -5,6 +5,7 @@ mod unix {
     use rexpect::spawn;
     use rexpect::errors::*;
     use rexpect::process::wait;
+    use rexpect::os::unix::ProcessExt;
 
 
     /// The following code emits:

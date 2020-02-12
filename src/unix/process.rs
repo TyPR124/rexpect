@@ -15,6 +15,33 @@ use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 pub use nix::sys::{wait, signal};
 use errors::*; // load error-chain
 
+// Can any of this be ported/generalized for Windows?
+pub trait ProcessExt {
+    fn status(&self) -> Option<wait::WaitStatus>;
+    fn wait(&self) -> Result<wait::WaitStatus>;
+    fn exit(&mut self) -> Result<wait::WaitStatus>;
+    fn signal(&mut self, sig: signal::Signal) -> Result<()>;
+    fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus>;
+}
+
+impl ProcessExt for crate::process::PtyProcess {
+    fn status(&self) -> Option<wait::WaitStatus> {
+        self.inner.status()
+    }
+    fn wait(&self) -> Result<wait::WaitStatus> {
+        self.inner.wait()
+    }
+    fn exit(&mut self) -> Result<wait::WaitStatus> {
+        self.inner.exit()
+    }
+    fn signal(&mut self, sig: signal::Signal) -> Result<()> {
+        self.inner.signal(sig)
+    }
+    fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
+        self.inner.kill(sig)
+    }
+}
+
 
 /// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
@@ -34,6 +61,7 @@ use errors::*; // load error-chain
 /// extern crate rexpect;
 ///
 /// use rexpect::process::PtyProcess;
+/// use rexpect::os::unix::ProcessExt;
 /// use std::process::Command;
 /// use std::fs::File;
 /// use std::io::{BufReader, LineWriter};
@@ -160,6 +188,7 @@ impl PtyProcess {
     ///
     /// # extern crate rexpect;
     /// use rexpect::process;
+    /// use rexpect::os::unix::ProcessExt;
     /// use std::process::Command;
     ///
     /// # fn main() {

@@ -37,6 +37,7 @@ use crate::unix as raw;
 /// extern crate rexpect;
 ///
 /// use rexpect::process::PtyProcess;
+/// use rexpect::os::unix::ProcessExt;
 /// use std::process::Command;
 /// use std::fs::File;
 /// use std::io::{BufReader, LineWriter};
@@ -110,63 +111,67 @@ impl PtyProcess {
         self.inner.set_kill_timeout(timeout_ms)
     }
 
-    /// Get status of child process, nonblocking.
-    ///
-    /// This method runs waitpid on the process.
-    /// This means: If you ran `exit()` before or `status()` tihs method will
-    /// return an Error
-    ///
-    /// # Example
-    /// ```rust,no_run
-    ///
-    /// # extern crate rexpect;
-    /// use rexpect::process;
-    /// use std::process::Command;
-    ///
-    /// # fn main() {
-    ///     let cmd = Command::new("/path/to/myprog");
-    ///     let process = process::PtyProcess::new(cmd).expect("could not execute myprog");
-    ///     while process.status().unwrap() == process::wait::WaitStatus::StillAlive {
-    ///         // do something
-    ///     }
-    /// # }
-    /// ```
-    ///
-    pub fn status(&self) -> Option<wait::WaitStatus> {
-        self.inner.status()
-    }
+    // Now in os::unix::ProcessExt
+    // /// Get status of child process, nonblocking.
+    // ///
+    // /// This method runs waitpid on the process.
+    // /// This means: If you ran `exit()` before or `status()` tihs method will
+    // /// return an Error
+    // ///
+    // /// # Example
+    // /// ```rust,no_run
+    // ///
+    // /// # extern crate rexpect;
+    // /// use rexpect::process;
+    // /// use std::process::Command;
+    // ///
+    // /// # fn main() {
+    // ///     let cmd = Command::new("/path/to/myprog");
+    // ///     let process = process::PtyProcess::new(cmd).expect("could not execute myprog");
+    // ///     while process.status().unwrap() == process::wait::WaitStatus::StillAlive {
+    // ///         // do something
+    // ///     }
+    // /// # }
+    // /// ```
+    // ///
+    // pub fn status(&self) -> Option<wait::WaitStatus> {
+    //     self.inner.status()
+    // }
 
     pub fn exit_status(&self) -> Option<ExitStatus> {
         self.inner.exit_status()
     }
+    // Now in os::unix::ProcessExt
+    // /// Wait until process has exited. This is a blocking call.
+    // /// If the process doesn't terminate this will block forever.
+    // pub fn wait(&self) -> Result<wait::WaitStatus> {
+    //     self.inner.wait()
+    // }
 
-    /// Wait until process has exited. This is a blocking call.
-    /// If the process doesn't terminate this will block forever.
-    pub fn wait(&self) -> Result<wait::WaitStatus> {
-        self.inner.wait()
-    }
+    // Now in os::unix::ProcessExt
+    // /// Regularly exit the process, this method is blocking until the process is dead
+    // pub fn exit(&mut self) -> Result<wait::WaitStatus> {
+    //     self.inner.exit()
+    // }
 
-    /// Regularly exit the process, this method is blocking until the process is dead
-    pub fn exit(&mut self) -> Result<wait::WaitStatus> {
-        self.inner.exit()
-    }
+    // Now in os::unix::ProcessExt
+    // /// Nonblocking variant of `kill()` (doesn't wait for process to be killed)
+    // pub fn signal(&mut self, sig: signal::Signal) -> Result<()> {
+    //     self.inner.signal(sig)
+    // }
 
-    /// Nonblocking variant of `kill()` (doesn't wait for process to be killed)
-    pub fn signal(&mut self, sig: signal::Signal) -> Result<()> {
-        self.inner.signal(sig)
-    }
-
-    /// Kill the process with a specific signal. This method blocks, until the process is dead
-    ///
-    /// repeatedly sends SIGTERM to the process until it died,
-    /// the pty session is closed upon dropping PtyMaster,
-    /// so we don't need to explicitely do that here.
-    ///
-    /// if `kill_timeout` is set and a repeated sending of signal does not result in the process
-    /// being killed, then `kill -9` is sent after the `kill_timeout` duration has elapsed.
-    pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
-        self.inner.kill(sig)
-    }
+    // Now in os::unix::ProcessExt
+    // /// Kill the process with a specific signal. This method blocks, until the process is dead
+    // ///
+    // /// repeatedly sends SIGTERM to the process until it died,
+    // /// the pty session is closed upon dropping PtyMaster,
+    // /// so we don't need to explicitely do that here.
+    // ///
+    // /// if `kill_timeout` is set and a repeated sending of signal does not result in the process
+    // /// being killed, then `kill -9` is sent after the `kill_timeout` duration has elapsed.
+    // pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
+    //     self.inner.kill(sig)
+    // }
 }
 
 #[cfg(test)]
@@ -176,6 +181,7 @@ mod tests {
     use nix::sys::{wait, signal};
     use std::io::prelude::*;
     use std::{thread, time};
+    // use crate::os::unix::ProcessExt;
 
     #[test]
     /// Open cat, write string, read back string twice, send Ctrl^C and check that cat exited

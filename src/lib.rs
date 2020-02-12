@@ -78,7 +78,9 @@
 //!
 //! ```
 
+#[cfg(unix)]
 extern crate nix;
+
 extern crate regex;
 extern crate tempfile;
 #[cfg(unix)]
@@ -94,6 +96,14 @@ pub use reader::ReadUntil;
 
 #[cfg(unix)]
 mod unix;
+
+// Public OS-specific API
+pub mod os {
+    #[cfg(unix)]
+    pub mod unix {
+        pub use ::unix::process::ProcessExt;
+    }
+}
 
 #[cfg(windows)]
 mod windows;
