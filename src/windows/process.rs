@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::process::{Command, ExitStatus};
 
-use errors::*;
+use crate::errors::*;
 
 pub struct PtyProcess {
 

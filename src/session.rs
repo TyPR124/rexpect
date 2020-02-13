@@ -1,14 +1,14 @@
 //! Main module of rexpect: start new process and interact with it
 
-use process::PtyProcess;
-use reader::{NBReader, Regex};
-pub use reader::ReadUntil;
+use crate::process::PtyProcess;
+use crate::reader::{NBReader, Regex};
+pub use crate::reader::ReadUntil;
 use std::fs::File;
 use std::io::LineWriter;
 use std::process::Command;
 use std::io::prelude::*;
 use std::ops::{Deref, DerefMut};
-use errors::*; // load error-chain
+use crate::errors::*; // load error-chain
 use tempfile;
 
 /// Interact with a process with read/write/signals, etc.

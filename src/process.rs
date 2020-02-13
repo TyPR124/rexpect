@@ -16,7 +16,7 @@ use std::process::{Command, ExitStatus};
 #[cfg(unix)] // TODO: Move this somewhere else
 pub use nix::sys::{wait, signal};
 
-use errors::*; // load error-chain
+use crate::errors::*; // load error-chain
 
 #[cfg(unix)]
 use crate::unix as raw;
