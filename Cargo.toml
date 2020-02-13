@@ -14,7 +14,6 @@ readme      = "README.md"
 
 
 [dependencies]
-# nix = "0.17"
 regex = "1.3"
 error-chain = "0.12"
 tempfile = "3" # Needed on Windows?
@@ -25,7 +24,7 @@ nix = "0.17"
 
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["consoleapi"] }
+winapi = { version = "0.3", features = ["consoleapi", "namedpipeapi"] }
 
 [badges]
 travis-ci = { repository = "philippkeller/rexpect" }
