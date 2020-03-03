@@ -1,9 +1,10 @@
 #![cfg(windows)]
 
+mod pipe;
 pub mod process;
-pub mod session;
 
-
+pub type PtyReader = pipe::Receiver;
+pub type PtyWriter = pipe::Sender;
 
 
 #[cfg(windows)]

@@ -1,6 +1,6 @@
 //! Start a process via pty
 
-use std;
+// use std;
 use std::fs::File;
 use std::process::{Command, ExitStatus};
 use std::os::unix::process::{CommandExt, ExitStatusExt};
@@ -8,12 +8,14 @@ use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::{thread, time};
 use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
 use nix::fcntl::{OFlag, open};
-use nix;
+// use nix;
 use nix::sys::{stat, termios};
 use nix::unistd::{fork, ForkResult, setsid, dup, dup2, Pid};
 use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 pub use nix::sys::{wait, signal};
-use errors::*; // load error-chain
+use crate::errors::*; // load error-chain
+
+use super::{PtyReader, PtyWriter};
 
 // Can any of this be ported/generalized for Windows?
 pub trait ProcessExt {
@@ -22,6 +24,7 @@ pub trait ProcessExt {
     fn exit(&mut self) -> Result<wait::WaitStatus>;
     fn signal(&mut self, sig: signal::Signal) -> Result<()>;
     fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus>;
+    fn get_file_handle(&self) -> File;
 }
 
 impl ProcessExt for crate::process::PtyProcess {
@@ -39,6 +42,9 @@ impl ProcessExt for crate::process::PtyProcess {
     }
     fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
         self.inner.kill(sig)
+    }
+    fn get_file_handle(&self) -> File {
+        self.inner.get_file_handle()
     }
 }
 
@@ -168,6 +174,15 @@ impl PtyProcess {
         // needed because otherwise fd is closed both by dropping process and reader/writer
         let fd = dup(self.pty.as_raw_fd()).unwrap();
         unsafe { File::from_raw_fd(fd) }
+    }
+
+    pub fn get_io_handles(&mut self) -> Result<(PtyReader, PtyWriter)> {
+        let f = self.get_file_handle();
+        // let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
+        // let reader = NBReader::new(f, timeout_ms);
+        let writer = f.try_clone().chain_err(|| "couldn't open write stream")?;
+        let reader = f;
+        Ok((reader, writer))
     }
 
     /// At the drop of PtyProcess the running process is killed. This is blocking forever if

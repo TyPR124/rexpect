@@ -97,7 +97,7 @@ mod unix;
 pub mod os {
     #[cfg(unix)]
     pub mod unix {
-        pub use ::unix::process::ProcessExt;
+        pub use crate::unix::process::ProcessExt;
     }
 }
 

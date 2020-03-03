@@ -19,9 +19,11 @@ pub use nix::sys::{wait, signal};
 use crate::errors::*; // load error-chain
 
 #[cfg(unix)]
-use crate::unix as raw;
+use crate::unix as imp;
 #[cfg(windows)]
-use crate::windows as raw;
+use crate::windows as imp;
+
+use imp::{PtyReader, PtyWriter};
 
 /// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
@@ -66,7 +68,7 @@ use crate::windows as raw;
 /// ```
 pub struct PtyProcess {
     // pub(crate) is for testing
-    pub(crate) inner: raw::process::PtyProcess
+    pub(crate) inner: imp::process::PtyProcess
 }
 
 
@@ -99,13 +101,18 @@ pub struct PtyProcess {
 impl PtyProcess {
     /// Start a process in a forked pty
     pub fn new(command: Command) -> Result<Self> {
-        let inner = raw::process::PtyProcess::new(command)?;
+        let inner = imp::process::PtyProcess::new(command)?;
         Ok(Self { inner })
     }
 
-    /// Get handle to pty fork for reading/writing
-    pub fn get_file_handle(&self) -> File {
-        self.inner.get_file_handle()
+    // /// Get handle to pty fork for reading/writing
+    // pub fn get_file_handle(&self) -> File {
+    //     // self.inner.get_file_handle()
+    //     unimplemented!("Move get_file_handle to unix ext trait")
+    // }
+
+    pub(crate) fn get_io_handles(&mut self) -> Result<(PtyReader, PtyWriter)> {
+        self.inner.get_io_handles()
     }
 
     /// At the drop of PtyProcess the running process is killed. This is blocking forever if
@@ -192,6 +199,7 @@ mod tests {
     fn test_cat() {
         // wrapping into closure so I can use ?
         || -> std::io::Result<()> {
+            use crate::os::unix::ProcessExt;
             let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
             let f = process.get_file_handle();
             let mut writer = LineWriter::new(&f);

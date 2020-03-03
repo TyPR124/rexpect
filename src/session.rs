@@ -11,11 +11,18 @@ use std::ops::{Deref, DerefMut};
 use crate::errors::*; // load error-chain
 use tempfile;
 
+#[cfg(unix)]
+use crate::unix as imp;
+#[cfg(windows)]
+use crate::windows as imp;
+
+use imp::{PtyReader, PtyWriter};
+
 /// Interact with a process with read/write/signals, etc.
 #[allow(dead_code)]
 pub struct PtySession {
     pub process: PtyProcess,
-    pub writer: LineWriter<File>,
+    pub writer: LineWriter<PtyWriter>,
     pub reader: NBReader,
     pub commandname: String, // only for debugging purposes now
 }
@@ -228,9 +235,12 @@ pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySes
         .chain_err(|| "couldn't start process")?;
     process.set_kill_timeout(timeout_ms);
 
-    let f = process.get_file_handle();
-    let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
-    let reader = NBReader::new(f, timeout_ms);
+    // let f = process.get_file_handle();
+    // let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
+    // let reader = NBReader::new(f, timeout_ms);
+    let (r, w) = process.get_io_handles()?;
+    let writer = LineWriter::new(w);
+    let reader = NBReader::new(r, timeout_ms);
     Ok(PtySession {
            process: process,
            writer: writer,
@@ -382,6 +392,9 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
                   PS1=\"~~~~\"\n\
                   unset PROMPT_COMMAND\n").expect("cannot write to tmpfile");
     let mut c = Command::new("bash");
+    c.stdin(std::process::Stdio::inherit());
+    c.stdout(std::process::Stdio::inherit());
+    c.stderr(std::process::Stdio::inherit());
     c.args(&["--rcfile", rcfile.path().to_str().unwrap_or_else(|| return "temp file does not exist".into())]);
     spawn_command(c, timeout).and_then(|p| {
         let new_prompt = "[REXPECT_PROMPT>";
@@ -425,8 +438,8 @@ mod tests {
             let mut s = spawn("cat", Some(1000))?;
             s.send_line("hans")?;
             assert_eq!("hans", s.read_line()?);
-            let should = ::process::wait::WaitStatus::Signaled(s.process.inner.child_pid,
-                                                               ::process::signal::Signal::SIGTERM,
+            let should = crate::process::wait::WaitStatus::Signaled(s.process.inner.child_pid,
+                                                               crate::process::signal::Signal::SIGTERM,
                                                                false);
             assert_eq!(should, s.process.exit()?);
             Ok(())
