@@ -6,7 +6,7 @@ use std::sync::mpsc::{channel, Receiver};
 use std::{thread, result};
 use std::{time, fmt};
 use crate::errors::*; // load error-chain
-pub use regex::Regex;
+use regex::Regex;
 
 #[derive(Debug)]
 enum PipeError {
@@ -174,53 +174,57 @@ impl NBReader {
         }
         Ok(())
     }
-
-    /// Read until needle is found (blocking!) and return tuple with:
-    /// 1. yet unread string until and without needle
-    /// 2. matched needle
-    ///
-    /// This methods loops (while reading from the Cursor) until the needle is found.
-    ///
-    /// There are different modes:
-    ///
-    /// - `ReadUntil::String` searches for string (use '\n'.to_string() to search for newline).
-    ///   Returns not yet read data in first String, and needle in second String
-    /// - `ReadUntil::Regex` searches for regex
-    ///   Returns not yet read data in first String and matched regex in second String
-    /// - `ReadUntil::NBytes` reads maximum n bytes
-    ///   Returns n bytes in second String, first String is left empty
-    /// - `ReadUntil::EOF` reads until end of file is reached
-    ///   Returns all bytes in second String, first is left empty
-    ///
-    /// Note that when used with a tty the lines end with \r\n
-    ///
-    /// Returns error if EOF is reached before the needle could be found.
-    ///
-    /// # Example with line reading, byte reading, regex and EOF reading.
-    ///
-    /// ```
-    /// # use std::io::Cursor;
-    /// use rexpect::reader::{NBReader, ReadUntil, Regex};
-    /// // instead of a Cursor you would put your process output or file here
-    /// let f = Cursor::new("Hello, miss!\n\
-    ///                         What do you mean: 'miss'?");
-    /// let mut e = NBReader::new(f, None);
-    ///
-    /// let (first_line, _) = e.read_until(&ReadUntil::String('\n'.to_string())).unwrap();
-    /// assert_eq!("Hello, miss!", &first_line);
-    ///
-    /// let (_, two_bytes) = e.read_until(&ReadUntil::NBytes(2)).unwrap();
-    /// assert_eq!("Wh", &two_bytes);
-    ///
-    /// let re = Regex::new(r"'[a-z]+'").unwrap(); // will find 'miss'
-    /// let (before, reg_match) = e.read_until(&ReadUntil::Regex(re)).unwrap();
-    /// assert_eq!("at do you mean: ", &before);
-    /// assert_eq!("'miss'", &reg_match);
-    ///
-    /// let (_, until_end) = e.read_until(&ReadUntil::EOF).unwrap();
-    /// assert_eq!("?", &until_end);
-    /// ```
-    ///
+    // NBReader no longer public, so don't need this doc
+    // (Maybe make this a test instead?)
+    // / Read until needle is found (blocking!) and return tuple with:
+    // / 1. yet unread string until and without needle
+    // / 2. matched needle
+    // /
+    // / This methods loops (while reading from the Cursor) until the needle is found.
+    // /
+    // / There are different modes:
+    // /
+    // / - `ReadUntil::String` searches for string (use '\n'.to_string() to search for newline).
+    // /   Returns not yet read data in first String, and needle in second String
+    // / - `ReadUntil::Regex` searches for regex
+    // /   Returns not yet read data in first String and matched regex in second String
+    // / - `ReadUntil::NBytes` reads maximum n bytes
+    // /   Returns n bytes in second String, first String is left empty
+    // / - `ReadUntil::EOF` reads until end of file is reached
+    // /   Returns all bytes in second String, first is left empty
+    // /
+    // / Note that when used with a tty the lines end with \r\n
+    // /
+    // / Returns error if EOF is reached before the needle could be found.
+    // /
+    // / # Example with line reading, byte reading, regex and EOF reading.
+    // /
+    // / ```
+    // / # use std::io::Cursor;
+    // / //use rexpect::reader::{NBReader, ReadUntil};
+    // / use crate::reader::NBReader;
+    // / use rexpect::ReadUntil;
+    // / use regex::Regex;
+    // / // instead of a Cursor you would put your process output or file here
+    // / let f = Cursor::new("Hello, miss!\n\
+    // /                         What do you mean: 'miss'?");
+    // / let mut e = NBReader::new(f, None);
+    // /
+    // / let (first_line, _) = e.read_until(&ReadUntil::String('\n'.to_string())).unwrap();
+    // / assert_eq!("Hello, miss!", &first_line);
+    // /
+    // / let (_, two_bytes) = e.read_until(&ReadUntil::NBytes(2)).unwrap();
+    // / assert_eq!("Wh", &two_bytes);
+    // /
+    // / let re = Regex::new(r"'[a-z]+'").unwrap(); // will find 'miss'
+    // / let (before, reg_match) = e.read_until(&ReadUntil::Regex(re)).unwrap();
+    // / assert_eq!("at do you mean: ", &before);
+    // / assert_eq!("'miss'", &reg_match);
+    // /
+    // / let (_, until_end) = e.read_until(&ReadUntil::EOF).unwrap();
+    // / assert_eq!("?", &until_end);
+    // / ```
+    // /
     pub fn read_until(&mut self, needle: &ReadUntil) -> Result<(String, String)> {
         let start = time::Instant::now();
 

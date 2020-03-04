@@ -86,11 +86,12 @@ extern crate tempfile;
 
 pub mod process;
 pub mod session;
-pub mod reader;
+mod reader;
 mod command;
 pub use command::Command;
 pub use session::{spawn, spawn_bash, spawn_python};
 pub use reader::ReadUntil;
+pub use regex::Regex;
 
 #[cfg(unix)]
 mod unix;
