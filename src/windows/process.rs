@@ -1,9 +1,10 @@
 use std::fs::File;
-use std::process::{Command, ExitStatus};
+use std::process::ExitStatus;
 
 use crate::errors::*;
+// use crate::Command;
 
-use super::{PtyReader, PtyWriter};
+use super::{Command, PtyReader, PtyWriter};
 
 pub struct PtyProcess {
 

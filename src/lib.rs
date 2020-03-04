@@ -87,22 +87,23 @@ extern crate tempfile;
 pub mod process;
 pub mod session;
 pub mod reader;
+mod command;
+pub use command::Command;
 pub use session::{spawn, spawn_bash, spawn_python};
 pub use reader::ReadUntil;
 
 #[cfg(unix)]
 mod unix;
+#[cfg(windows)]
+mod windows;
 
 // Public OS-specific API
 pub mod os {
     #[cfg(unix)]
     pub mod unix {
-        pub use crate::unix::process::ProcessExt;
+        pub use crate::unix::ProcessExt;
     }
 }
-
-#[cfg(windows)]
-mod windows;
 
 #[macro_use]
 extern crate error_chain;

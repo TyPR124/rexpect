@@ -2,7 +2,7 @@
 
 // use std;
 use std::fs::File;
-use std::process::{Command, ExitStatus};
+use std::process::ExitStatus;
 // use std::os::unix::process::ExitStatusExt;
 // use std::os::unix::io::{FromRawFd, AsRawFd};
 
@@ -17,6 +17,7 @@ use std::process::{Command, ExitStatus};
 pub use nix::sys::{wait, signal};
 
 use crate::errors::*; // load error-chain
+use crate::Command;
 
 #[cfg(unix)]
 use crate::unix as imp;
@@ -44,7 +45,8 @@ use imp::{PtyReader, PtyWriter};
 ///
 /// use rexpect::process::PtyProcess;
 /// use rexpect::os::unix::ProcessExt;
-/// use std::process::Command;
+/// use rexpect::Command;
+/// //use std::process::Command;
 /// use std::fs::File;
 /// use std::io::{BufReader, LineWriter};
 /// use std::os::unix::io::{FromRawFd, AsRawFd};
@@ -68,7 +70,7 @@ use imp::{PtyReader, PtyWriter};
 /// ```
 pub struct PtyProcess {
     // pub(crate) is for testing
-    pub(crate) inner: imp::process::PtyProcess
+    pub(crate) inner: imp::PtyProcess
 }
 
 
@@ -101,7 +103,7 @@ pub struct PtyProcess {
 impl PtyProcess {
     /// Start a process in a forked pty
     pub fn new(command: Command) -> Result<Self> {
-        let inner = imp::process::PtyProcess::new(command)?;
+        let inner = imp::PtyProcess::new(command.into_inner())?;
         Ok(Self { inner })
     }
 

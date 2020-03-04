@@ -5,11 +5,13 @@ use crate::reader::{NBReader, Regex};
 pub use crate::reader::ReadUntil;
 use std::fs::File;
 use std::io::LineWriter;
-use std::process::Command;
+// use std::process::Command;
 use std::io::prelude::*;
 use std::ops::{Deref, DerefMut};
 use crate::errors::*; // load error-chain
 use tempfile;
+
+use crate::Command;
 
 #[cfg(unix)]
 use crate::unix as imp;
@@ -392,9 +394,9 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
                   PS1=\"~~~~\"\n\
                   unset PROMPT_COMMAND\n").expect("cannot write to tmpfile");
     let mut c = Command::new("bash");
-    c.stdin(std::process::Stdio::inherit());
-    c.stdout(std::process::Stdio::inherit());
-    c.stderr(std::process::Stdio::inherit());
+    // c.stdin(std::process::Stdio::inherit());
+    // c.stdout(std::process::Stdio::inherit());
+    // c.stderr(std::process::Stdio::inherit());
     c.args(&["--rcfile", rcfile.path().to_str().unwrap_or_else(|| return "temp file does not exist".into())]);
     spawn_command(c, timeout).and_then(|p| {
         let new_prompt = "[REXPECT_PROMPT>";

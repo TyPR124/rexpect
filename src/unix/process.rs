@@ -2,7 +2,7 @@
 
 // use std;
 use std::fs::File;
-use std::process::{Command, ExitStatus};
+use std::process::ExitStatus;
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::{thread, time};
@@ -15,7 +15,7 @@ use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 pub use nix::sys::{wait, signal};
 use crate::errors::*; // load error-chain
 
-use super::{PtyReader, PtyWriter};
+use super::{Command, PtyReader, PtyWriter};
 
 // Can any of this be ported/generalized for Windows?
 pub trait ProcessExt {
@@ -68,7 +68,8 @@ impl ProcessExt for crate::process::PtyProcess {
 ///
 /// use rexpect::process::PtyProcess;
 /// use rexpect::os::unix::ProcessExt;
-/// use std::process::Command;
+/// //use std::process::Command;
+/// use rexpect::Command;
 /// use std::fs::File;
 /// use std::io::{BufReader, LineWriter};
 /// use std::os::unix::io::{FromRawFd, AsRawFd};
@@ -204,7 +205,8 @@ impl PtyProcess {
     /// # extern crate rexpect;
     /// use rexpect::process;
     /// use rexpect::os::unix::ProcessExt;
-    /// use std::process::Command;
+    /// //use std::process::Command;
+    /// use rexpect::Command;
     ///
     /// # fn main() {
     ///     let cmd = Command::new("/path/to/myprog");
