@@ -137,3 +137,10 @@ pub mod errors {
         }
     }
 }
+
+#[cfg(all(windows, test))]
+#[test]
+fn wintest() {
+    let mut ping = crate::spawn("ping 127.0.0.1", None).unwrap();
+    ping.exp_string("Ping statistics for 127.0.0.1").unwrap();
+}

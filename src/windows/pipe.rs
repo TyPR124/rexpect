@@ -1,5 +1,5 @@
 use winapi::um::{
-    namedpipeapi::{CreatePipe, PeekNamedPipe},
+    namedpipeapi::CreatePipe,
     fileapi::{ReadFile, FlushFileBuffers, WriteFile},
     handleapi::CloseHandle,
     winnt::HANDLE,
@@ -7,7 +7,8 @@ use winapi::um::{
 
 use std::{
     ptr,
-    io::{self, Read, Write}
+    io::{self, Read, Write},
+    os::windows::io::AsRawHandle,
 };
 
 fn last_error() -> io::Error { io::Error::last_os_error() }
@@ -21,7 +22,7 @@ pub struct Receiver {
 }
 
 // Send is safe iff Sender and Receiver cannot
-// be duplicated in any way.
+// be duplicated in any (safe) way.
 unsafe impl Send for Sender {}
 unsafe impl Send for Receiver {}
 
@@ -74,7 +75,19 @@ impl Read for Receiver {
     }
 }
 
-pub fn unnamed() -> Result<(Sender, Receiver), io::Error> {
+impl AsRawHandle for Sender {
+    fn as_raw_handle(&self) -> HANDLE {
+        self.handle
+    }
+}
+
+impl AsRawHandle for Receiver {
+    fn as_raw_handle(&self) -> HANDLE {
+        self.handle
+    }
+}
+
+pub fn unnamed() -> io::Result<(Sender, Receiver)> {
     let mut tx: HANDLE = ptr::null_mut();
     let mut rx: HANDLE = ptr::null_mut();
     let r = unsafe {

@@ -7,11 +7,31 @@ use std::fs;
 use std::io::{self, ErrorKind};
 use std::mem::{align_of, size_of, size_of_val};
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::io::AsRawHandle;
 use std::path::Path;
 use std::ptr;
 use std::sync::Mutex;
 
-use winapi::um::winnt::VOID;
+use lazy_static::lazy_static;
+use static_assertions::const_assert;
+
+use winapi::{
+    shared::winerror::{S_OK, HRESULT_CODE},
+    um::{
+        consoleapi::{ClosePseudoConsole, CreatePseudoConsole},
+        handleapi::CloseHandle,
+        processthreadsapi::{
+            CreateProcessW, InitializeProcThreadAttributeList, UpdateProcThreadAttribute,
+            PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_LIST,
+        },
+        winbase::{CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, STARTUPINFOEXW},
+        wincontypes::COORD,
+        winnt::{HANDLE, VOID},
+    },
+};
+
+use crate::errors::Result;
+use super::{PtyProcess, pipe};
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 #[doc(hidden)]
@@ -182,106 +202,101 @@ impl Command {
         }
     }
 
-    // pub fn spawn_pty(&self) -> io::Result<Child> {
-    //     let maybe_env = self.env.capture_if_changed();
-    //     // To have the spawning semantics of unix/windows stay the same, we need
-    //     // to read the *child's* PATH if one is provided. See #15149 for more
-    //     // details.
-    //     let program = maybe_env.as_ref().and_then(|env| {
-    //         if let Some(v) = env.get(OsStr::new("PATH")) {
-    //             // Split the value and test each path to see if the
-    //             // program exists.
-    //             for path in env::split_paths(&v) {
-    //                 let path = path
-    //                     .join(self.program.to_str().unwrap())
-    //                     .with_extension(env::consts::EXE_EXTENSION);
-    //                 if fs::metadata(&path).is_ok() {
-    //                     return Some(path.into_os_string());
-    //                 }
-    //             }
-    //         }
-    //         None
-    //     });
+    pub fn spawn_pty(&self) -> io::Result<PtyProcess> {
+        let maybe_env = self.env.capture_if_changed();
+        // To have the spawning semantics of unix/windows stay the same, we need
+        // to read the *child's* PATH if one is provided. See #15149 for more
+        // details.
+        let program = maybe_env.as_ref().and_then(|env| {
+            if let Some(v) = env.get(OsStr::new("PATH")) {
+                // Split the value and test each path to see if the
+                // program exists.
+                for path in env::split_paths(&v) {
+                    let path = path
+                        .join(self.program.to_str().unwrap())
+                        .with_extension(env::consts::EXE_EXTENSION);
+                    if fs::metadata(&path).is_ok() {
+                        return Some(path.into_os_string());
+                    }
+                }
+            }
+            None
+        });
 
-    //     // let mut si = zeroed_startupinfo();
-    //     // si.cb = mem::size_of::<c::STARTUPINFO>() as c::DWORD;
-    //     // si.dwFlags = c::STARTF_USESTDHANDLES;
+        // let mut si = zeroed_startupinfo();
+        // si.cb = mem::size_of::<c::STARTUPINFO>() as c::DWORD;
+        // si.dwFlags = c::STARTF_USESTDHANDLES;
 
-    //     let mut si = STARTUPINFOEXW::default();
-    //     si.StartupInfo.cb = size_of_val(&si) as u32;
-    //     let mut boxed_tal = make_boxed_tal()?;
+        let mut si = STARTUPINFOEXW::default();
+        si.StartupInfo.cb = size_of_val(&si) as u32;
+        
+        let (input_tx, input_rx) = pipe::unnamed()?;
+        let (output_tx, output_rx) = pipe::unnamed()?;
+        let size = COORD { X: 120, Y: 120 };
+        let mut pty_handle = ptr::null_mut();
+        let r = unsafe {
+            CreatePseudoConsole(
+                size,
+                input_rx.as_raw_handle(),
+                output_tx.as_raw_handle(),
+                0,
+                &mut pty_handle,
+            )
+        };
+        if r != S_OK {
+            Err(io::Error::from_raw_os_error(HRESULT_CODE(r)))?;
+        }
+        let mut boxed_tal = make_boxed_tal()?;
+        fill_tal(&mut boxed_tal, pty_handle)?;
+        si.lpAttributeList = boxed_tal.as_mut_ptr().cast();
 
-    //     let (input_tx, input_rx) = winpipe::unnamed()?;
-    //     let (output_tx, output_rx) = winpipe::unnamed()?;
-    //     let size = COORD { X: 120, Y: 120 };
-    //     let mut pty = ptr::null_mut();
-    //     let r = unsafe {
-    //         CreatePseudoConsole(
-    //             size,
-    //             *input_rx.as_handle(),
-    //             *output_tx.as_handle(),
-    //             0,
-    //             &mut pty,
-    //         )
-    //     };
-    //     if r != S_OK {
-    //         Err(winerr::from_hresult(r))?;
-    //     }
-    //     fill_tal(&mut boxed_tal, pty)?;
-    //     si.lpAttributeList = boxed_tal.as_mut_ptr().cast();
+        let program = program.as_ref().unwrap_or(&self.program);
+        let mut cmd_str = make_command_line(program, &self.args)?;
+        cmd_str.push(0); // add null terminator
 
-    //     let program = program.as_ref().unwrap_or(&self.program);
-    //     let mut cmd_str = make_command_line(program, &self.args)?;
-    //     cmd_str.push(0); // add null terminator
+        // stolen from the libuv code.
+        // let mut flags = self.flags | c::CREATE_UNICODE_ENVIRONMENT;
+        // if self.detach {
+        //     flags |= c::DETACHED_PROCESS | c::CREATE_NEW_PROCESS_GROUP;
+        // }
+        let flags = CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT;
 
-    //     // stolen from the libuv code.
-    //     // let mut flags = self.flags | c::CREATE_UNICODE_ENVIRONMENT;
-    //     // if self.detach {
-    //     //     flags |= c::DETACHED_PROCESS | c::CREATE_NEW_PROCESS_GROUP;
-    //     // }
-    //     let flags = CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT;
+        let (envp, _data) = make_envp(maybe_env)?;
+        let (dirp, _data) = make_dirp(self.cwd.as_ref())?;
+        let mut pi = PROCESS_INFORMATION::default();
 
-    //     let (envp, _data) = make_envp(maybe_env)?;
-    //     let (dirp, _data) = make_dirp(self.cwd.as_ref())?;
-    //     let mut pi = PROCESS_INFORMATION::default();
+        lazy_static! {
+            static ref CREATE_PROCESS_LOCK: Mutex<()> = Mutex::new(());
+        }
+        let _guard = CREATE_PROCESS_LOCK
+            .lock()
+            .expect("CREATE_PROCESS_LOCK error");
 
-    //     lazy_static! {
-    //         static ref CREATE_PROCESS_LOCK: Mutex<()> = Mutex::new(());
-    //     }
-    //     let _guard = CREATE_PROCESS_LOCK
-    //         .lock()
-    //         .expect("CREATE_PROCESS_LOCK error");
+        let r = unsafe {
+            CreateProcessW(
+                ptr::null_mut(), // app name (if null, taken from cmd_str)
+                cmd_str.as_mut_ptr(),
+                ptr::null_mut(), // proc attr
+                ptr::null_mut(), // thread attr
+                0,               // Inherit handles bool,
+                flags,
+                envp,
+                dirp,
+                &mut si.StartupInfo,
+                &mut pi,
+            )
+        };
 
-    //     let r = unsafe {
-    //         CreateProcessW(
-    //             ptr::null_mut(), // app name (if null, taken from cmd_str)
-    //             cmd_str.as_mut_ptr(),
-    //             ptr::null_mut(), // proc attr
-    //             ptr::null_mut(), // thread attr
-    //             0,               // Inherit handles bool,
-    //             flags,
-    //             envp,
-    //             dirp,
-    //             &mut si.StartupInfo,
-    //             &mut pi,
-    //         )
-    //     };
+        if r == 0 {
+            Err(io::Error::last_os_error())?;
+        }
 
-    //     if r == 0 {
-    //         Err(winerr::last_error())?;
-    //     }
+        drop(_guard);
+        unsafe { CloseHandle(pi.hThread) };
+        let proc_handle = pi.hProcess;
 
-    //     drop(_guard);
-    //     unsafe { CloseHandle(pi.hThread) };
-    //     let proc_handle = pi.hProcess;
-
-    //     Ok(Child {
-    //         proc_handle,
-    //         pty_handle: pty,
-    //         stdin_handle: input_tx,
-    //         stdout_handle: output_rx,
-    //     })
-    // }
+        Ok(PtyProcess::init(output_rx, input_tx, pty_handle, proc_handle))
+    }
 
     pub fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Command {
         self.args.push(arg.as_ref().to_os_string());
@@ -432,4 +447,56 @@ fn make_dirp(d: Option<&OsString>) -> io::Result<(*const u16, Vec<u16>)> {
         }
         None => Ok((ptr::null(), Vec::new())),
     }
+}
+
+#[allow(non_camel_case_types)]
+type TAL_BUF_UNIT = u64;
+const_assert!(align_of::<TAL_BUF_UNIT>() >= align_of::<PROC_THREAD_ATTRIBUTE_LIST>());
+const TAL_BUF_UNIT_SIZE: usize = size_of::<TAL_BUF_UNIT>();
+
+fn make_boxed_tal() -> io::Result<Box<[TAL_BUF_UNIT]>> {
+    let mut tal_size_bytes = 0;
+    // No need to check return value, call will fail but fill in tal_size value.
+    unsafe { InitializeProcThreadAttributeList(ptr::null_mut(), 1, 0, &mut tal_size_bytes) };
+    let tal_size_bytes = tal_size_bytes as usize;
+    let tal_size_units = match tal_size_bytes % TAL_BUF_UNIT_SIZE {
+        0 => tal_size_bytes / TAL_BUF_UNIT_SIZE,
+        _ => (tal_size_bytes / TAL_BUF_UNIT_SIZE) + 1,
+    };
+    let mut tal_buf = Vec::<TAL_BUF_UNIT>::with_capacity(tal_size_units);
+    tal_buf.resize(tal_size_units, 0);
+    let mut tal_buf = tal_buf.into_boxed_slice();
+    //Actually init in the TAL
+    let r = unsafe {
+        InitializeProcThreadAttributeList(
+            tal_buf.as_mut_ptr().cast(),
+            1,
+            0,
+            &mut tal_size_bytes.clone(),
+        )
+    };
+    if r == 0 {
+        Err(io::Error::last_os_error())?;
+    }
+    Ok(tal_buf)
+}
+
+fn fill_tal(tal_buf: &mut [TAL_BUF_UNIT], pty: HANDLE) -> io::Result<()> {
+    // Magic value comes from WinBase.h, value is currently not implemented in winapi-rs
+    const PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE: usize = 0x0002_0016;
+    let r = unsafe {
+        UpdateProcThreadAttribute(
+            tal_buf.as_mut_ptr().cast(),
+            0,
+            PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
+            pty,
+            size_of_val(&pty),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
+    };
+    if r == 0 {
+        Err(io::Error::last_os_error())?;
+    }
+    Ok(())
 }

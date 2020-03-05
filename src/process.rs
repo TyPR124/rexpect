@@ -36,12 +36,12 @@ use imp::{PtyReader, PtyWriter};
 /// Typically you want to do something like this (for a more complete example see
 /// unit test `test_cat` within this module):
 ///
-/// ```
+/// ```no_run
 /// # #![allow(unused_mut)]
 /// # #![allow(unused_variables)]
 ///
-/// extern crate nix;
-/// extern crate rexpect;
+/// //extern crate nix;
+/// //extern crate rexpect;
 ///
 /// use rexpect::process::PtyProcess;
 /// use rexpect::os::unix::ProcessExt;
