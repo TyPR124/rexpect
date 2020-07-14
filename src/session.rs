@@ -182,8 +182,8 @@ impl PtySession {
         // let f = process.get_file_handle();
         // let (reader, writer) = process.take_io_handles().chain_err(|| "could take process IO handles")?;
         // let reader = f.try_clone().chain_err(|| "couldn't open write stream")?;
-        let reader = process.take_reader().chain_err(|| "could not get pty reader")?;
-        let writer = process.take_writer().chain_err(|| "could not get pty writer")?;
+        let reader = process.reader().try_clone().chain_err(|| "could not get pty reader")?;
+        let writer = process.writer().try_clone().chain_err(|| "could not get pty writer")?;
         let stream = StreamSession::new(reader, writer, timeout_ms);
         Ok(Self {
             process,
